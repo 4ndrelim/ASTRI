@@ -117,7 +117,7 @@ class DatasetGenerator:
         aphase_estimate = torch.rand(self.image_size, self.image_size)
         # Convert phase_patterns into a torch tensor
         phase_patterns_tensor = torch.from_numpy(phase_patterns).float()
-        phase_patterns_tensor = torch.fft.ifftshift(phase_patterns_tensor)
+        phase_patterns_tensor = torch.fft.ifftshift(phase_patterns_tensor, dim=(-2, -1))
         known_abs_spatial = torch.ones(phase_patterns_tensor.shape)
         for _ in range(iterative):
             asignal_spatial = known_abs_spatial * torch.exp(1j * aphase_estimate)
@@ -141,7 +141,7 @@ class DatasetGenerator:
         # Compute 2D Fourier transform
         fft_result = 1/phase_patterns.shape[-1] * torch.fft.fft2(complex_patterns)
         # Fourier shift
-        fft_result = torch.fft.fftshift(fft_result)
+        fft_result = torch.fft.fftshift(fft_result, dim=(-2, -1))
         # Compute the magnitude (intensity pattern)
         magnitude_patterns = torch.abs(fft_result)
         # Convert the result back to a NumPy array and return
