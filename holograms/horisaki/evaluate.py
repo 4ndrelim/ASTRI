@@ -474,7 +474,7 @@ if __name__ == "__main__":
     predictions = np.squeeze(predictions, axis=1)
     print(predictions[0])
     transformed = apply_fresnel_propagation(predictions[0])
-    transformed[transformed > 0.6] = 0
+    # transformed[transformed > 0.6] = 0
     display_hologram_and_transformed(images[0],
                                      predictions[0],
                                      transformed)
