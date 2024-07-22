@@ -434,12 +434,14 @@ def apply_fresnel_propagation(phase_patterns: torch.tensor) -> torch.tensor:
     # Compute 2D Fourier transform
     fft_result = 1/phase_patterns.shape[-1] * torch.fft.fft2(complex_patterns)
     # Fourier shift
-    fft_result = torch.fft.fftshift(fft_result)
+    fft_result = torch.fft.fftshift(fft_result, dim=(-2, -1))
     # Compute the magnitude (intensity pattern)
     magnitude_patterns = torch.abs(fft_result)
-    
     # Convert the result back to a NumPy array and return
     magnitude_patterns = magnitude_patterns.numpy().astype(np.float32)
+
+    magnitude_patterns = (magnitude_patterns-magnitude_patterns.min()) / (magnitude_patterns.max() - magnitude_patterns.min())
+
     return magnitude_patterns
 
 
@@ -471,9 +473,11 @@ if __name__ == "__main__":
     # Remove the channel dimension
     predictions = np.squeeze(predictions, axis=1)
     print(predictions[0])
+    transformed = apply_fresnel_propagation(predictions[0])
+    transformed[transformed > 0.6] = 0
     display_hologram_and_transformed(images[0],
                                      predictions[0],
-                                     apply_fresnel_propagation(predictions[0]))
+                                     transformed)
     
     
 

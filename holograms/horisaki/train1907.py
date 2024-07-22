@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
 import joblib
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 
@@ -76,9 +76,23 @@ def load_data(path: str) -> Tuple[np.ndarray, np.ndarray]:
     return features, labels
 
 
+class IdentityScaler(BaseEstimator, TransformerMixin):
+    """
+    Dummy class that does not perform feature scaling.
+    """
+    def fit(self, X, y=None):
+        return self
+    def transform(self, X):
+        return X
+    def fit_transform(self, X, y=None):
+        return X
+    def inverse_transform(self, X):
+        return X
+
+
 def feature_scaling(train: np.ndarray,
                     test: np.ndarray,
-                    scaler=MinMaxScaler(),
+                    scaler: BaseEstimator,
                     save_path: Optional[str]=None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Feature scale train and test set. Reshape to 1D to scale and the revert to 2D.
@@ -118,7 +132,8 @@ def feature_scaling(train: np.ndarray,
 
 # pylint: disable=invalid-name
 def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device,
-                 scaler_path: Optional[str]=None) -> Tuple[DataLoader, DataLoader, DataLoader]:
+                              scaler: Optional[BaseEstimator]=MinMaxScaler(),
+                              scaler_path: Optional[str]=None) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     Produce DataLoader of train, validation, and test sets, and store tensors at specified device.
     Note: 15% of train dataset to be used as validation dataset.
@@ -130,7 +145,7 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
     X_train, y_train = load_data(train_path)
     X_test, y_test = load_data(test_path)
     # perform scaling
-    X_train_scaled, X_test_scaled = feature_scaling(X_train, X_test, save_path=scaler_path)
+    X_train_scaled, X_test_scaled = feature_scaling(X_train, X_test, scaler, save_path=scaler_path)
 
     # Add channel dimension: (num_samples, height, width) -> (num_samples, 1, height, width)
     X_train_scaled = np.expand_dims(X_train_scaled, axis=1)
@@ -528,9 +543,11 @@ class MultiscaleResNet(nn.Module):
         # Compute 2D Fourier transform
         fft_result = 1/phase_patterns.shape[-1] * torch.fft.fft2(complex_patterns)
         # Fourier shift
-        fft_result = torch.fft.fftshift(fft_result)
+        fft_result = torch.fft.fftshift(fft_result, dim=(-2, -1))
         # Compute the magnitude (intensity pattern)
         magnitude_patterns = torch.abs(fft_result)
+        # Normalize
+        magnitude_patterns = (magnitude_patterns-magnitude_patterns.min()) / (magnitude_patterns.max() - magnitude_patterns.min())
 
         return magnitude_patterns
 
@@ -667,6 +684,11 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
+    NO_SCALER = IdentityScaler()
+    # train_set, val_set, test_set = prepare_data_for_training(TRAIN_PATH, TEST_PATH,
+    #                                                          device, NO_SCALER,
+    #                                                          scaler_path=SCALER_PATH)
+    
     train_set, val_set, test_set = prepare_data_for_training(TRAIN_PATH, TEST_PATH,
                                                              device, scaler_path=SCALER_PATH)
 

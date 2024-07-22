@@ -12,8 +12,8 @@ import keras
 # USER CONFIG
 NUM_IMAGES = 9 # Number of images to generate
 IMAGE_SIZE = 64 # Size of each image (NxN)
-RATIOS =  [0.34, 0.34, 0.3] # Ratios of random:radial:digits
-FILENAME = "test.npy" # Name of the file to save the dataset
+RATIOS =  [0.33, 0.33, 0.34] # Ratios of random:radial:digits
+FILENAME = "t.npy" # Name of the file to save the dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, '..', 'dataset')
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -69,7 +69,7 @@ class DatasetGenerator:
         dataset = []
         for _ in range(num_images):
             # Random frequency and intensity range
-            frequency = np.random.uniform(10, 20)  # Random frequency for variety
+            frequency = np.random.uniform(5, 25)  # Random frequency for variety
             noise_std = np.random.uniform(0, 0.3)
             random_val = np.random.rand()
     
@@ -149,6 +149,29 @@ class DatasetGenerator:
         
         assert not np.isnan(magnitude_patterns).any(), "Something went wrong.."
         return magnitude_patterns
+    
+    def apply_fresnel_propagation2(self, phase_patterns: np.ndarray):
+        # Convert to tensor equivalent
+        phase_patterns = torch.from_numpy(phase_patterns).float()
+        # Normalized phase, phase patterns assumed to be in [0, 1]
+        phase_patterns = phase_patterns * 2 * torch.pi - torch.pi # between -pi and pi
+        # Convert to complex exponential
+        complex_patterns = 1/phase_patterns.shape[-1] * torch.exp(1j * phase_patterns)
+        # Ensure it is in complex64
+        complex_patterns = complex_patterns.to(torch.complex64)
+        # Compute 2D Fourier transform
+        fft_result = 1/phase_patterns.shape[-1] * torch.fft.fft2(complex_patterns)
+        # Fourier shift
+        fft_result = torch.fft.fftshift(fft_result, dim=(-2, -1))
+        # Compute the magnitude (intensity pattern)
+        magnitude_patterns = torch.abs(fft_result)
+        # Convert the result back to a NumPy array and return
+        magnitude_patterns = magnitude_patterns.numpy().astype(np.float32)
+
+        magnitude_patterns = (magnitude_patterns-magnitude_patterns.min()) / (magnitude_patterns.max() - magnitude_patterns.min())
+        
+        assert not np.isnan(magnitude_patterns).any(), "Something went wrong.."
+        return magnitude_patterns
 
     def create_pattern_dataset(self, num_images: int, choice: int):
         if num_images == 0:
@@ -212,20 +235,26 @@ if __name__ == "__main__":
     # if shuffle, add False to end of function call
     data = generator.save_dataset()
 
-    # Display a few examples
-    for i in range(NUM_IMAGES):
-        plt.subplot(1, 3, 1)
+    # # Display a few examples
+    for i in range(min(NUM_IMAGES, 20)):
+        plt.subplot(1, 4, 1)
         plt.imshow(data[i][:, :IMAGE_SIZE], cmap='gray')
         plt.title(f'image_{i+1}')
         plt.axis('off')
 
-        plt.subplot(1, 3, 2)
+        plt.subplot(1, 4, 2)
         plt.imshow(data[i][:, IMAGE_SIZE:], cmap='gray')
         plt.title(f'hologram_{i+1}')
         plt.axis('off')
 
-        plt.subplot(1, 3, 3)
+        plt.subplot(1, 4, 3)
         plt.imshow(generator.apply_fresnel_propagation(data[i][:, IMAGE_SIZE:]), cmap='gray')
         plt.title(f'reconstructed_image_{i+1}')
         plt.axis('off')
+
+        plt.subplot(1, 4, 4)
+        plt.imshow(generator.apply_fresnel_propagation2(data[i][:, IMAGE_SIZE:]), cmap='gray')
+        plt.title(f'reconstructed_image_{i+1}')
+        plt.axis('off')
+
         plt.show()
