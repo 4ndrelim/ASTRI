@@ -21,6 +21,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 
+import matplotlib.pyplot as plt
+
 #pylint: disable=pointless-string-statement
 """
 Down blocks need to pad input tensors with zero-padding of 1.
@@ -121,8 +123,8 @@ def feature_scaling(train: np.ndarray,
 
     # Clip the values to ensure they fall within [0, 1]
     # necessary even with scaling due to precision errors
-    train_scaled = np.clip(train_scaled, 0, 1)
-    test_scaled = np.clip(test_scaled, 0, 1)
+    # train_scaled = np.clip(train_scaled, 0, 1)
+    # test_scaled = np.clip(test_scaled, 0, 1)
 
     # save
     if save_path is not None:
@@ -144,6 +146,7 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
     """
     X_train, y_train = load_data(train_path)
     X_test, y_test = load_data(test_path)
+    
     # perform scaling
     X_train_scaled, X_test_scaled = feature_scaling(X_train, X_test, scaler, save_path=scaler_path)
 
@@ -546,8 +549,6 @@ class MultiscaleResNet(nn.Module):
         fft_result = torch.fft.fftshift(fft_result, dim=(-2, -1))
         # Compute the magnitude (intensity pattern)
         magnitude_patterns = torch.abs(fft_result)
-        # Normalize
-        magnitude_patterns = (magnitude_patterns-magnitude_patterns.min()) / (magnitude_patterns.max() - magnitude_patterns.min())
 
         return magnitude_patterns
 
@@ -574,7 +575,7 @@ class MultiscaleResNet(nn.Module):
         loss1 = self.loss_fn(predictions, y)
 
         z = self.apply_fresnel_propagation(predictions)
-        loss2 = nn.MSELoss(reduction='mean')(z, unscaled_x)
+        loss2 = 5*nn.MSELoss(reduction='mean')(z, unscaled_x)
 
         return 2*(0.8*loss1 + 0.2*loss2)
 
@@ -666,7 +667,7 @@ def evaluate_model(model: MultiscaleResNet,
             # reshape
             y_np = y.cpu().numpy().reshape(y.shape[0], -1)
             predictions_np = predictions.cpu().numpy().reshape(predictions.shape[0], -1)
-            # accumulate MSE
+            # accumulate MAE
             for i in range(y_np.shape[0]):
                 total_mae += mean_absolute_error(y_np[i], predictions_np[i])
 
@@ -684,7 +685,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    NO_SCALER = IdentityScaler()
+    # NO_SCALER = IdentityScaler()
     # train_set, val_set, test_set = prepare_data_for_training(TRAIN_PATH, TEST_PATH,
     #                                                          device, NO_SCALER,
     #                                                          scaler_path=SCALER_PATH)
@@ -696,10 +697,10 @@ if __name__ == "__main__":
     my_model = my_model.to(device)
 
     my_optimizer = torch.optim.AdamW(my_model.parameters(),
-                                     lr=0.005)
+                                     lr=0.01)
 
     my_scheduler = torch.optim.lr_scheduler.MultiStepLR(my_optimizer,
-                                                        milestones=[10, 30], gamma=0.2)
+                                                        milestones=[10, 20, 30], gamma=0.5)
 
     # print(sum(p.numel() for p in my_model.parameters())) see the size
 
