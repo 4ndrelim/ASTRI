@@ -10,7 +10,7 @@ import keras
 
 
 # USER CONFIG
-NUM_IMAGES = 9 # Number of images to generate
+NUM_IMAGES = 15 # Number of images to generate
 IMAGE_SIZE = 64 # Size of each image (NxN)
 RATIOS =  [0.33, 0.33, 0.34] # Ratios of random:radial:digits
 FILENAME = "t.npy" # Name of the file to save the dataset
@@ -38,15 +38,15 @@ class DatasetGenerator:
         radius = np.sqrt(xx**2 + yy**2)
         
         # generate based on thresholds
-        if random_val <= 0.02:
+        if random_val <= 0.03:
             pattern = np.sin(frequency * np.pi * radius**2)
-        elif random_val <= 0.02 + 0.03:
+        elif random_val <= 0.03 + 0.04:
             pattern = np.sin(frequency * np.pi * np.exp(-radius))
-        elif random_val <= 0.02 + 0.03 + 0.05:
+        elif random_val <= 0.03 + 0.04 + 0.06:
             pattern = np.sin(frequency * np.pi * np.exp(-radius))
             attenuation = np.exp(-radius)
             pattern *= attenuation
-        elif random_val <= 0.02 + 0.03 + 0.05 + 0.06:
+        elif random_val <= 0.03 + 0.04 + 0.06 + 0.07:
             pattern = np.sin(frequency * np.pi * radius)
             attenuation = np.exp(-radius)
             pattern *= attenuation
@@ -56,13 +56,11 @@ class DatasetGenerator:
         # Add Gaussian noise
         noise = np.random.normal(0, noise_std, pattern.shape)
         pattern += noise
+
+        pattern = pattern + max(0, -np.min(pattern))
+        pattern = (pattern - pattern.min()) / (pattern.max() - pattern.min())
         
-        # Normalize to the range min_val to max_val
-        pattern_min = pattern.min()
-        pattern_max = pattern.max()
-        pattern_normalized = (pattern - pattern_min) / (pattern_max - pattern_min)  # Normalize to [0, 1]
-        
-        return pattern_normalized
+        return pattern.astype(np.float32)
     
 
     def generate_radial_patterns(self, num_images: int):
@@ -79,9 +77,12 @@ class DatasetGenerator:
         return dataset
     
 
-    def generate_random_phase_patterns(self, num_images: int):
-        random_intensities = np.random.randint(0, 256, (num_images, self.image_size, self.image_size), dtype=np.uint8)
-        return random_intensities.astype(np.float32) / 255.0
+    def generate_random_target_patterns(self, num_images: int):
+        random_intensities = np.random.randint(0, 256, (num_images, self.image_size, self.image_size), dtype=np.uint16)
+        scale = np.sqrt(np.sum(random_intensities**2, axis=(-2,-1)))
+        normalized = (1/scale)[:, np.newaxis, np.newaxis] * random_intensities.astype(np.float32)
+        return normalized
+        # return random_intensities.astype(np.float32) / 255.0
     
     def generate_digits(self, num_images: int):
         # load data
@@ -105,15 +106,19 @@ class DatasetGenerator:
             img = np.vstack((np.hstack((images[d1], images[d2])), np.hstack((images[d3], images[d4]))))
             # Resize the image
             scaled_img = cv2.resize(img, (self.image_size, self.image_size))
-            scaled_images[x] = scaled_img.reshape(self.image_size, self.image_size)
-
-        ret = scaled_images.astype(np.float32) / 255.0 # make sure output between 0 and 1
+            scaled_images[x] = scaled_img
+      
+        # normalize
+        scaled_images = scaled_images.astype('float32')
+        scale = np.sqrt(np.sum(scaled_images**2, axis=(-2,-1)))
+        scale = scale[:, np.newaxis, np.newaxis]
+        ret =  scaled_images / scale
         assert np.all(ret >= 0) and np.all(ret <= 1), "Scaled images are not within the range [0, 1]"
         return ret
     
     
     def apply_gerchberg_saxton(self, phase_patterns: np.ndarray) -> np.ndarray:
-        iterative = 15
+        iterative = 10
         aphase_estimate = torch.rand(self.image_size, self.image_size)
         # Convert phase_patterns into a torch tensor
         phase_patterns_tensor = torch.from_numpy(phase_patterns).float()
@@ -127,9 +132,9 @@ class DatasetGenerator:
             atemp_2 = torch.fft.ifft2(asignal_fourier)
             aphase_estimate = atemp_2.angle()
         return aphase_estimate/(2*torch.pi) + 0.5 # 0,1
+        
 
-
-    def apply_fresnel_propagation(self, phase_patterns: np.ndarray):
+    def apply_fresnel_propagation(self, phase_patterns: np.ndarray) -> np.ndarray:
         # Convert to tensor equivalent
         phase_patterns = torch.from_numpy(phase_patterns).float()
         # Normalized phase, phase patterns assumed to be in [0, 1]
@@ -144,9 +149,9 @@ class DatasetGenerator:
         fft_result = torch.fft.fftshift(fft_result, dim=(-2, -1))
         # Compute the magnitude (intensity pattern)
         magnitude_patterns = torch.abs(fft_result)
+
         # Convert the result back to a NumPy array and return
         magnitude_patterns = magnitude_patterns.numpy().astype(np.float32)
-        
         assert not np.isnan(magnitude_patterns).any(), "Something went wrong.."
         return magnitude_patterns
     
@@ -180,8 +185,8 @@ class DatasetGenerator:
         
         # target_patterns on left, phase_patterns on right
         if choice == 0:
-            hologram_phase_patterns = self.generate_random_phase_patterns(num_images)
-            target_patterns = self.apply_fresnel_propagation(hologram_phase_patterns)
+            target_patterns = self.generate_random_target_patterns(num_images)
+            hologram_phase_patterns = self.apply_gerchberg_saxton(target_patterns)
         elif choice == 1:
             hologram_phase_patterns = self.generate_radial_patterns(num_images)
             target_patterns = self.apply_fresnel_propagation(hologram_phase_patterns)
@@ -230,6 +235,52 @@ class DatasetGenerator:
         return dataset
     
 
+# Utils
+def histogram_equalization(image: np.ndarray) -> np.ndarray:
+    hist, bins = np.histogram(image.flatten(), bins=1024, range=[0, 1])
+
+    # Calculate cumulative distribution function (CDF)
+    cdf = hist.cumsum()
+    print(cdf)
+    cdf_normalized = cdf / cdf[-1]  # Normalize to [0, 1]
+
+    # Use linear interpolation of the CDF to find new pixel values
+    image_equalized = np.interp(image.flatten(), bins[:-1], cdf_normalized)
+    
+    # Reshape the flat array back to the original image shape
+    image_equalized = image_equalized.reshape(image.shape)
+    
+    return image_equalized
+
+
+def threshold_image(im, th):
+    thresholded_img = np.zeros(im.shape)
+    thresholded_img[im > th] = im[im > th]
+    return thresholded_img
+
+def compute_otsu_criteria(im, th):
+    thresholded_img = threshold_image(im, th)
+    nb_pixels = im.size
+    nb_pixels1 = np.count_nonzero(thresholded_img)
+    weight1 = nb_pixels1 / nb_pixels
+    weight0 = 1-weight1
+    if weight1 == 1 or weight0 == 0:
+        return np.inf
+    val_pixels1 = im[thresholded_img == im]
+    val_pixels0 = im[thresholded_img == 0]
+    var0 = np.var(val_pixels0) if len(val_pixels0) > 0 else 0
+    var1 = np.var(val_pixels1) if len(val_pixels1) > 0 else 0
+    return weight0*var0 + weight1*var1
+
+def find_best_threshold(im):
+    threshold_range = range(np.max(im)+1)
+    criterias = [compute_otsu_criteria(im, th) for th in threshold_range]
+    best_threshold = threshold_range[np.argmin(criterias)]
+    return best_threshold
+
+
+    
+
 if __name__ == "__main__":
     generator = DatasetGenerator(NUM_IMAGES, IMAGE_SIZE, RATIOS, SAVE_PATH)
     # if shuffle, add False to end of function call
@@ -237,24 +288,38 @@ if __name__ == "__main__":
 
     # # Display a few examples
     for i in range(min(NUM_IMAGES, 20)):
-        plt.subplot(1, 4, 1)
-        plt.imshow(data[i][:, :IMAGE_SIZE], cmap='gray')
+        target = data[i][:, :IMAGE_SIZE]
+        hologram = data[i][:, IMAGE_SIZE:]
+        transformed = generator.apply_fresnel_propagation(hologram)
+        # transformed = generator.apply_gerchberg_saxton(target).numpy().astype(np.float32)
+        
+        plt.subplot(1, 3, 1)
+        plt.imshow(target, cmap='gray')
         plt.title(f'image_{i+1}')
         plt.axis('off')
 
-        plt.subplot(1, 4, 2)
-        plt.imshow(data[i][:, IMAGE_SIZE:], cmap='gray')
+        plt.subplot(1, 3, 2)
+        plt.imshow(hologram, cmap='gray')
         plt.title(f'hologram_{i+1}')
         plt.axis('off')
 
-        plt.subplot(1, 4, 3)
-        plt.imshow(generator.apply_fresnel_propagation(data[i][:, IMAGE_SIZE:]), cmap='gray')
-        plt.title(f'reconstructed_image_{i+1}')
+        plt.subplot(1, 3, 3)
+        plt.imshow(transformed, cmap='gray')
+        plt.title(f'reconstructed{i+1}')
         plt.axis('off')
 
-        plt.subplot(1, 4, 4)
-        plt.imshow(generator.apply_fresnel_propagation2(data[i][:, IMAGE_SIZE:]), cmap='gray')
-        plt.title(f'reconstructed_image_{i+1}')
-        plt.axis('off')
+        print("Pixel values original: ", np.sum(target))
+        print("Pixel values fresnel: ", np.sum(transformed))
+        print("\n")
+
+        # transformed_ = cv2.fastNlMeansDenoising((255*transformed).astype(np.uint8), None, h=10, templateWindowSize=3, searchWindowSize=3).astype(np.float32) / 255.0
+        # transformed_ = cv2.medianBlur(transformed, 3)
+        # transformed_ = (255.0 * transformed).astype(np.uint8)
+        # transformed_ = (threshold_image(transformed_, find_best_threshold(transformed_)) / 255.0).astype(np.float32)
+        # print("Pixel values otsu: ", np.sum(transformed_))
+        # plt.subplot(1, 4, 4)
+        # plt.imshow(transformed_, cmap='gray')
+        # plt.title(f'transformed_{i+1}')
+        # plt.axis('off')
 
         plt.show()

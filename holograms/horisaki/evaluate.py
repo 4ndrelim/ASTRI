@@ -23,7 +23,7 @@ MODEL_DIR = os.path.join(BASE_DIR, 'saved_model')
 MODEL_PATH = os.path.join(MODEL_DIR, "my_model.pth")
 SCALER_PATH = os.path.join(MODEL_DIR, "scaler.pkl")
 
-DATASET_PATH = os.path.join(BASE_DIR, '4digitsonly.npy') # dataset path [[CHANGE THIS!]
+DATASET_PATH = os.path.join(BASE_DIR, '5digits.npy') # dataset path [[CHANGE THIS!]
 
 
 # Model
@@ -303,7 +303,6 @@ def load_data_for_eval(path: str) -> np.ndarray:
     assert features.ndim == 3, "Data should have a batch dimension!"
     assert features.shape[1] == features.shape[2] == 64, \
         "Data does not have the correct dimensions."
-    features /= 255.0 # PLEASE REMOVE ONCE FIXED!!!!!!!!!!!!!!!!!!!
     return features
 
 
@@ -424,7 +423,7 @@ def apply_fresnel_propagation_torch_test(phase_patterns, wavelength=632.8e-9, pi
     return magnitude_patterns
 
 
-def apply_fresnel_propagation(phase_patterns: torch.tensor) -> torch.tensor:
+def apply_fresnel_propagation(phase_patterns: torch.tensor) -> np.ndarray:
     # Normalized phase
     phase_patterns = phase_patterns * 2 * torch.pi - torch.pi # between -pi and pi
     # Convert to complex exponential
@@ -437,11 +436,9 @@ def apply_fresnel_propagation(phase_patterns: torch.tensor) -> torch.tensor:
     fft_result = torch.fft.fftshift(fft_result, dim=(-2, -1))
     # Compute the magnitude (intensity pattern)
     magnitude_patterns = torch.abs(fft_result)
+
     # Convert the result back to a NumPy array and return
     magnitude_patterns = magnitude_patterns.numpy().astype(np.float32)
-
-    magnitude_patterns = (magnitude_patterns-magnitude_patterns.min()) / (magnitude_patterns.max() - magnitude_patterns.min())
-
     return magnitude_patterns
 
 
@@ -472,11 +469,11 @@ if __name__ == "__main__":
 
     # Remove the channel dimension
     predictions = np.squeeze(predictions, axis=1)
-    print(predictions[0])
-    transformed = apply_fresnel_propagation(predictions[0])
-    # transformed[transformed > 0.6] = 0
-    display_hologram_and_transformed(images[0],
-                                     predictions[0],
+    print(predictions[4])
+    transformed = apply_fresnel_propagation(predictions[4])
+    transformed[transformed > 0.5] = 0
+    display_hologram_and_transformed(images[4],
+                                     predictions[4],
                                      transformed)
     
     
