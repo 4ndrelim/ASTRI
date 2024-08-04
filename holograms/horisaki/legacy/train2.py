@@ -1,6 +1,8 @@
 """
 A residual NN model for Computer-Generated Holograms (CGH)
 
+Test with loss between original and reconsutructed
+
 # torch.arg(torch.ifft2d(img))
 # np.abs(torch.fft2d(hologram*i))
 """
@@ -718,6 +720,7 @@ def evaluate_model_reconstructed(model: MultiscaleResNet,
 
     #
     to_remove = 0
+    
     with torch.no_grad():
         for X, y in data_loader:
             unscaled_X_cloned = X.clone().detach().cpu().numpy()

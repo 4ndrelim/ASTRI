@@ -1,6 +1,8 @@
 """
 A residual NN model for Computer-Generated Holograms (CGH)
 
+Test with loss between label hologram and predicted
+
 # torch.arg(torch.ifft2d(img))
 # np.abs(torch.fft2d(hologram*i))
 """
@@ -688,12 +690,13 @@ def evaluate_model(model: MultiscaleResNet,
     :param data_loader: Test set
     :return: loss, r2 score
     """
-    scaler = joblib.load(SCALER_PATH) # for reversing
     model.eval()
     total_mae = 0.0 # use MAE as a metric
 
     #
     to_remove = 0
+    scaler = joblib.load(SCALER_PATH) # for reversing
+
     with torch.no_grad():  # disable gradient computation
         for X, y in data_loader:
             # loss += model.loss(X, y).detach().cpu().item()
@@ -722,24 +725,24 @@ def evaluate_model(model: MultiscaleResNet,
                 global TRACKED_COUNTER
                 img = np.concatenate((unscaled_X[0][0], predictions_np[0][0], z_np[0][0]), axis=1)
                 TRACKED_NP[TRACKED_COUNTER] = img
-                # plt.subplot(1,3,1)
-                # plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, :IMAGE_SIZE], cmap='gray')
-                # plt.title('Original')
-                # plt.axis('off')
+                plt.subplot(1,3,1)
+                plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, :IMAGE_SIZE], cmap='gray')
+                plt.title('Original')
+                plt.axis('off')
 
-                # plt.subplot(1,3,2)
-                # plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, IMAGE_SIZE:2*IMAGE_SIZE], cmap='gray')
-                # plt.title('Predictions')
-                # plt.axis('off')
+                plt.subplot(1,3,2)
+                plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, IMAGE_SIZE:2*IMAGE_SIZE], cmap='gray')
+                plt.title('Predictions')
+                plt.axis('off')
 
-                # plt.subplot(1,3,3)
-                # transformed = TRACKED_NP[TRACKED_COUNTER][:, 2*IMAGE_SIZE:]
-                # transformed[transformed > 0.5] = 0
-                # plt.imshow(transformed, cmap='gray')
-                # plt.title('Reconstructed')
-                # plt.axis('off')
+                plt.subplot(1,3,3)
+                transformed = TRACKED_NP[TRACKED_COUNTER][:, 2*IMAGE_SIZE:]
+                transformed[transformed > 0.5] = 0
+                plt.imshow(transformed, cmap='gray')
+                plt.title('Reconstructed')
+                plt.axis('off')
 
-                # plt.show()
+                plt.show()
                 TRACKED_COUNTER = TRACKED_COUNTER + 1
                 to_remove += 1
 
@@ -765,7 +768,7 @@ if __name__ == "__main__":
     train_set, val_set, test_set = prepare_data_for_training(TRAIN_PATH, TEST_PATH,
                                                              device, scaler_path=SCALER_PATH)
 
-    my_model = MultiscaleResNet(1, 1, N=IMAGE_SIZE, K=IMAGE_SIZE//2, 
+    my_model = MultiscaleResNet(1, 1, N=IMAGE_SIZE, K=IMAGE_SIZE//2,
                                 criterion=nn.SmoothL1Loss(reduction='mean', beta=0.15))
     my_model = my_model.to(device)
 
@@ -790,3 +793,5 @@ if __name__ == "__main__":
     print("Model trained. Evaluating on test set..")
     test_mae1 = evaluate_model(my_model, test_set)
     print(f"MAE on TEST set: {test_mae1}")
+
+    np.save(os.path.join(BASE_DIR, "train1_results.npy"), TRACKED_NP)
