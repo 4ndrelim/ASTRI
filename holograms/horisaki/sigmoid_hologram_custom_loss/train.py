@@ -143,7 +143,7 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
 
     # permuate indices for train and validation set later on
     indices = np.random.permutation(X_train_scaled.shape[0])
-    train_len = int(X_train_scaled.shape[0] * 0.85) # 15% of dataset to be used for validation
+    train_len = int(X_train_scaled.shape[0] * 0.9) # 10% of dataset to be used for validation
     training_idx, val_idx = indices[:train_len], indices[train_len:]
     X_training_scaled, y_training = X_train_scaled[training_idx, :], y_train[training_idx, :]
     X_val_scaled, y_val = X_train_scaled[val_idx, :], y_train[val_idx, :]
