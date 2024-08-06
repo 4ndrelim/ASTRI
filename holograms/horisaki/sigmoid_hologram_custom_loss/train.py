@@ -123,7 +123,7 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
     :return: Train, validation, test DataLoaders
     """
     X_train, y_train = load_data(train_path)
-    X_train, y_train = X_train[:2000], y_train[:2000] # for testing
+    # X_train, y_train = X_train[:2000], y_train[:2000] # for testing
     X_test, y_test = load_data(test_path)
  
     # perform scaling
