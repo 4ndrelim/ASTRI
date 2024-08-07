@@ -12,12 +12,12 @@ from torch.utils.data import DataLoader
 
 from model import MultiscaleResNet
 from config import EPOCHS, LEARNING_RATE, IMAGE_SIZE, LOSS_FN, DTYPE_NP, DTYPE_TORCH, INITIALIZER, GAMMA, MILESTONES
-from utils import apply_fresnel_propagation
+from utils import apply_fresnel_propagation, normalize # normalize was imported from sklearn.metrics?
 
 import joblib
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, normalize
+from sklearn.metrics import mean_absolute_error
 
 import matplotlib.pyplot as plt
 
