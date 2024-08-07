@@ -194,6 +194,7 @@ def train_model(
         train_loss, batch_num = 0.0, 0
         for X_batch, y_batch in train_loader:
             optimizer.zero_grad()
+            # loss = model.loss(X_batch, y_batch)
             # loss = model.fresnel_loss(X_batch, scaler)
             loss = model.special_loss(X_batch, y_batch, scaler)
             # apply update

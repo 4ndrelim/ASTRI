@@ -453,7 +453,7 @@ class MultiscaleResNet(nn.Module):
         normalized_z = normalize(z)
         loss2 = self.loss_fn(normalized_z, unscaled_x)
 
-        return 0.7*loss1 + 0.3*loss2
+        return 0.9*loss1 + 0.1*loss2
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """
