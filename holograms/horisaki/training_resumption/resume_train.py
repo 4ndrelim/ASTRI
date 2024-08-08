@@ -26,9 +26,9 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 ############# CUSTOM BASED ON WHICH PARTIAL TRAINED #############
 from utils import apply_fresnel_propagation, normalize
 from model import MultiscaleResNet
-LOADED_DATA_DIR = os.path.join(BASE_DIR, "../tanh_hologram/dataset")
-LOADED_MODEL_PATH = os.path.join(BASE_DIR, "../tanh_hologram/saved_model/my_model.pth")
-LOADED_SCALER_PATH = os.path.join(BASE_DIR, "../tanh_hologram/saved_model/scaler.pkl")
+LOADED_DATA_DIR = os.path.join(BASE_DIR, "../sigmoid_hologram/dataset")
+LOADED_MODEL_PATH = os.path.join(BASE_DIR, "../sigmoid_hologram/saved_model/my_model.pth")
+LOADED_SCALER_PATH = os.path.join(BASE_DIR, "../sigmoid_hologram/saved_model/scaler.pkl")
 ############# CUSTOM BASED ON WHICH PARTIAL TRAINED #############
 
 TRAIN_PATH = os.path.join(LOADED_DATA_DIR, "train.npy")

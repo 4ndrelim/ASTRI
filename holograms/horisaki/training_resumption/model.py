@@ -232,8 +232,8 @@ class RBlock(nn.Module):
                                 padding=1, padding_mode='zeros').to(DTYPE_TORCH)
 
         # self._initialize_weights(initializer)
-        # self._initialize_weights(lambda tensor: nn.init.xavier_normal_(tensor))
-        self._initialize_weights(lambda tensor: nn.init.normal_(tensor, mean=0, std=math.sqrt(1.0 / torch.nn.init._calculate_correct_fan(tensor, 'fan_in'))))
+        self._initialize_weights(lambda tensor: nn.init.xavier_normal_(tensor))
+        #self._initialize_weights(lambda tensor: nn.init.kaiming_normal_(tensor, mode='fan_in', nonlinearity='linear'))
 
     def _initialize_weights(self, initializer: Callable):
         """
@@ -386,7 +386,7 @@ class MultiscaleResNet(nn.Module):
             x = torch.cat([x, skips[-1-i]], dim=1) # concat along channel dim
 
         x = self.rblock(x) # final block
-        m = nn.Tanh()
+        m = nn.Sigmoid() # was nn.tanh
         return m(x)
 
     def loss(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -445,15 +445,13 @@ class MultiscaleResNet(nn.Module):
         unscaled_x = torch.from_numpy(unscaled_x).to(DTYPE_TORCH).to(x.device)
 
         predictions = self.forward(x)
-        # loss1 = self.loss_fn(predictions, y)
-        mse_loss_fn = nn.MSELoss()
-        loss1 = torch.sqrt(mse_loss_fn(predictions, y))
+        loss1 = self.loss_fn(predictions, y)
 
         z = apply_fresnel_propagation(predictions)
         normalized_z = normalize(z)
         loss2 = self.loss_fn(normalized_z, unscaled_x)
 
-        return 0.9*loss1 + 0.1*loss2
+        return 0.85*loss1 + 0.15*loss2
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """

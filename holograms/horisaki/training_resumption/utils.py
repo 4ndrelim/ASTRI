@@ -12,33 +12,27 @@ from config import IMAGE_SIZE, DTYPE_NP, DTYPE_TORCH
 
 ########## FOURIER TRANSFORM FUNCTIONS ##########
 def apply_gerchberg_saxton(phase_patterns: np.ndarray) -> np.ndarray:
-    """
-    Generates holograms from targets.
-    """
     iterative = 10
-    xx, yy = np.meshgrid(np.linspace(-np.pi, np.pi, IMAGE_SIZE), np.linspace(-np.pi, np.pi, IMAGE_SIZE))
-    initial_phase = np.cos(xx) + np.cos(yy)
-    aphase_estimate = torch.tensor(initial_phase, dtype=DTYPE_TORCH)
+    aphase_estimate = torch.rand(IMAGE_SIZE, IMAGE_SIZE)
     # Convert phase_patterns into a torch tensor
     phase_patterns_tensor = torch.from_numpy(phase_patterns).to(DTYPE_TORCH)
-    # phase_patterns_tensor = torch.fft.ifftshift(phase_patterns_tensor, dim=(-2, -1))
+    #phase_patterns_tensor = torch.fft.ifftshift(phase_patterns_tensor, dim=(-2, -1))
     known_abs_spatial = torch.ones(phase_patterns_tensor.shape)
     for _ in range(iterative):
         asignal_spatial = known_abs_spatial * torch.exp(1j * aphase_estimate)
-        atemp_1 = 1/(IMAGE_SIZE) * torch.fft.fft2(asignal_spatial, dim=(-2,-1))
+        atemp_1 = 1/(IMAGE_SIZE) * torch.fft.fft2(asignal_spatial)
         atemp_ang = atemp_1.angle()
         asignal_fourier = phase_patterns_tensor.mul(torch.exp(1j * atemp_ang))
         atemp_2 = torch.fft.ifft2(asignal_fourier)
         aphase_estimate = atemp_2.angle()
-    res = aphase_estimate/torch.pi
-    return res.numpy().astype(DTYPE_NP)
+    return aphase_estimate/(2*torch.pi) + 0.5
 
 def apply_fresnel_propagation(phase_patterns: torch.Tensor) -> torch.Tensor:
     """
     Just take this on faith.
     """
     # Normalized phase
-    phase_patterns = phase_patterns * torch.pi # between -pi and pi
+    phase_patterns = phase_patterns * 2*torch.pi - torch.pi # between -pi and pi
     # Convert to complex exponential
     complex_patterns = 1/phase_patterns.shape[-1] * torch.exp(1j * phase_patterns)
     # ensure it is in complex64
@@ -49,7 +43,7 @@ def apply_fresnel_propagation(phase_patterns: torch.Tensor) -> torch.Tensor:
     # fft_result = torch.fft.fftshift(fft_result, dim=(-2, -1))
     # Compute the magnitude (intensity pattern)
     magnitude_patterns = torch.abs(fft_result)
-    return magnitude_patterns.to(DTYPE_TORCH)
+    return magnitude_patterns
 
 def apply_fresnel_propagation_np(phase_patterns: np.ndarray) -> np.ndarray:
     """
