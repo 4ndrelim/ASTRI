@@ -22,7 +22,7 @@ MODEL_DIR = os.path.join(BASE_DIR, 'saved_model') # scaler and saved_model
 MODEL_PATH = os.path.join(MODEL_DIR, "my_model.pth")
 SCALER_PATH = os.path.join(MODEL_DIR, "scaler.pkl")
 
-DATASET_PATH = os.path.join(BASE_DIR, '5digits.npy') # dataset path [[CHANGE THIS!]
+DATASET_PATH = os.path.join(BASE_DIR, '10digits.npy') # dataset path [[CHANGE THIS!]
 
 class IdentityScaler(BaseEstimator, TransformerMixin):
     """
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     print(predictions.shape)
     predictions = np.squeeze(predictions, axis=1)
     for i in range(predictions.shape[0]):
-        print("Hologram pixel sum: ", np.sum(predictions[i]))
+        print("Hologram pixel sum: ", torch.sum(predictions[i]))
         print(predictions[i])
         transformed = apply_fresnel_propagation(predictions[i]).numpy().astype(DTYPE_NP)
         display_hologram_and_transformed(images[i],

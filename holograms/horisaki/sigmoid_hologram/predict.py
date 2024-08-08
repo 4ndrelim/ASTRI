@@ -169,9 +169,10 @@ if __name__ == "__main__":
     print(predictions.shape)
     predictions = np.squeeze(predictions, axis=1)
     for i in range(predictions.shape[0]):
-        print("Hologram pixel sum: ", np.sum(predictions[i]))
+        print("Hologram pixel sum: ", torch.sum(predictions[i]))
         print(predictions[i])
         transformed = apply_fresnel_propagation(predictions[i]).numpy().astype(DTYPE_NP)
+        transformed[transformed > 0.29] = 0
         display_hologram_and_transformed(images[i],
                                         predictions[i],
                                         transformed)
