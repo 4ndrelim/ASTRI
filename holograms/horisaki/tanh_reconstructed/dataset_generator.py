@@ -13,9 +13,9 @@ from config import DTYPE_NP, DTYPE_TORCH, IMAGE_SIZE
 
 
 # USER CONFIG
-NUM_IMAGES = 40000 # Number of images to generate
+NUM_IMAGES = 1000 # Number of images to generate
 RATIOS =  [0, 0, 1] # Ratios of random:radial:digits
-FILENAME = "train.npy" # Name of the file to save the dataset
+FILENAME = "test.npy" # Name of the file to save the dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'dataset')
 os.makedirs(DATA_DIR, exist_ok=True)
