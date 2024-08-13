@@ -217,6 +217,8 @@ def train_model(
                     # inform the user better model is saved
                     user_msg += " Saving.."
                     model_state = model.state_dict()
+                    assert model_state is not None, "Something went wrong while saving the model.."
+                    torch.save(model_state, save_path)
 
             print(user_msg)
         # adjust lr after every epoch, if specified
