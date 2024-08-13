@@ -14,9 +14,9 @@ from config import DTYPE_NP, DTYPE_TORCH, IMAGE_SIZE
 
 
 # USER CONFIG
-NUM_IMAGES = 10 # Number of images to generate (48000, 100)
+NUM_IMAGES = 100 # Number of images to generate (48000, 100)
 RATIOS =  [0, 0, 1] # Ratios of random:radial:digits
-FILENAME = "delete.npy" # Name of the file to save the dataset
+FILENAME = "test.npy" # Name of the file to save the dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'dataset')
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     # if shuffle, add False to end of function call
     data = generator.save_dataset()
     
-    threshold_hist = []
+    # threshold_hist = []
 
     # # Display a few examples
     # for i in range(min(NUM_IMAGES, 20)):
