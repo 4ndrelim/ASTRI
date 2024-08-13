@@ -142,7 +142,7 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
 
     # permuate indices for train and validation set later on
     indices = np.random.permutation(X_train_scaled.shape[0])
-    train_len = int(X_train_scaled.shape[0] * 0.85) # 15% of dataset to be used for validation
+    train_len = int(X_train_scaled.shape[0] * 0.9) # 10% of dataset to be used for validation
     training_idx, val_idx = indices[:train_len], indices[train_len:]
     X_training_scaled, y_training = X_train_scaled[training_idx, :], y_train[training_idx, :]
     X_val_scaled, y_val = X_train_scaled[val_idx, :], y_train[val_idx, :]
@@ -194,6 +194,7 @@ def train_model(
         train_loss, batch_num = 0.0, 0
         for X_batch, y_batch in train_loader:
             optimizer.zero_grad()
+            # loss = model.loss(X_batch, y_batch)
             loss = model.fresnel_loss(X_batch, scaler)
             # loss = model.special_loss(X_batch, y_batch, scaler)
             # apply update
@@ -325,7 +326,7 @@ def evaluate_model_reconstructed(model: MultiscaleResNet,
 
             for i in range(unscaled_X.shape[0]):
                 total_mae += mean_absolute_error(np.ravel(unscaled_X[i][0]),
-                                                 np.ravel(normalize(z_np[i][0])))
+                                                 np.ravel(z_np[i][0]))
 
             if to_remove < 1:
                 # just take the first
@@ -333,7 +334,9 @@ def evaluate_model_reconstructed(model: MultiscaleResNet,
                 img = np.concatenate((unscaled_X[0][0], predictions_np[0][0], z_np[0][0]), axis=1)
                 TRACKED_NP[TRACKED_COUNTER] = img
                 original, hologram, transformed = unscaled_X[0][0], predictions_np[0][0], z_np[0][0]
+                # print("Original sq sum: ", np.sum(original**2))
                 print("Predictions sum: ", np.sum(hologram))
+                # print("Transformed sq sum: ", np.sum(transformed**2))
                 np.save(os.path.join(BASE_DIR, "train_results.npy"), TRACKED_NP)
                 # plt.subplot(1,3,1)
                 # plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, :IMAGE_SIZE], cmap='gray')

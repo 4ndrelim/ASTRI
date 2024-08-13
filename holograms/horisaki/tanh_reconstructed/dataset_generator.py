@@ -13,9 +13,9 @@ from config import DTYPE_NP, DTYPE_TORCH, IMAGE_SIZE
 
 
 # USER CONFIG
-NUM_IMAGES = 10 # Number of images to generate
+NUM_IMAGES = 30000 # Number of images to generate
 RATIOS =  [0, 0, 1] # Ratios of random:radial:digits
-FILENAME = "delete.npy" # Name of the file to save the dataset
+FILENAME = "train.npy" # Name of the file to save the dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'dataset')
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -133,11 +133,7 @@ class DatasetGenerator:
         scale = scale[:, np.newaxis, np.newaxis]
         ret =  scaled_images / scale
         assert np.all(ret >= 0) and np.all(ret <= 1), "Scaled images are not within the range [0, 1]"
-        return normalize(ret)
-        # scaled_images = scaled_images.astype(DTYPE_NP)
-        # # scaled_images /= 255.0
-        # # return scaled_images
-        # return (scaled_images-scaled_images.min()) / (scaled_images.max() - scaled_images.min())
+        return ret
 
     def create_pattern_dataset(self, num_images: int, choice: int):
         """
@@ -210,7 +206,7 @@ if __name__ == "__main__":
     # if shuffle, add False to end of function call
     data = generator.save_dataset()
 
-    # # Display a few examples
+    # Display a few examples
     # for i in range(min(NUM_IMAGES, 20)):
     #     target = data[i][:, :IMAGE_SIZE]
     #     hologram = data[i][:, IMAGE_SIZE:]

@@ -420,8 +420,8 @@ class MultiscaleResNet(nn.Module):
         predictions = self.forward(x)
 
         z = apply_fresnel_propagation(predictions)
-        normalized_z = normalize(z)
-        loss2 = self.loss_fn(unscaled_x, normalized_z)
+        # normalized_z = normalize(z)
+        loss2 = 10 * self.loss_fn(unscaled_x, z)
 
         return loss2
     
