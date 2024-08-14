@@ -14,10 +14,11 @@ from config import DTYPE_NP, IMAGE_SIZE
 
 
 # USER CONFIG
-NUM_IMAGES = 100000 # Number of images to generate
-RATIOS =  [0, 0, 1] # Ratios of random:images:digits
+NUM_IMAGES = 250000 # Number of images to generate
+RATIOS =  [20000/NUM_IMAGES, 130000/NUM_IMAGES, 100000/NUM_IMAGES] # Ratios of random:icons:digits
 FILENAME = "train.npy" # Name of the file to save the dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+RESOURCE_DIR = os.path.join(BASE_DIR, '..', 'resources')
 DATA_DIR = os.path.join(BASE_DIR, 'dataset')
 os.makedirs(DATA_DIR, exist_ok=True)
 SAVE_PATH = os.path.join(DATA_DIR, FILENAME)
@@ -36,11 +37,24 @@ class DatasetGenerator:
         self.save_path = save_path
         self.shuffle = shuffle
 
-    def generate_actual_images(self, num_images: int):
+    def generate_icons(self, num_images: int):
         """
         Add variety to dataset. Use real life images from CIFAR.
         """
-        pass
+        iconset = os.path.join(RESOURCE_DIR, "icons_50.npy")
+        data = np.load(iconset)
+
+        data = np.transpose(data, (0, 2, 3, 1))
+        # Convert to grayscale
+        data_gray = np.array([cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) for img in data])
+        # Resize images
+        data_resized = np.array([cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE)) for img in data_gray])
+        # Invert the grayscale images
+        processed_data = 255 - data_resized
+        # Randomly select num_images from processed_data
+        indices = np.random.choice(processed_data.shape[0], num_images, replace=False)
+        ret = processed_data[indices]
+        return ret
 
     def generate_random_target_patterns(self, num_images: int):
         """
@@ -92,7 +106,7 @@ class DatasetGenerator:
         if choice == 0:
             target_patterns = self.generate_random_target_patterns(num_images)
         elif choice == 1:
-            target_patterns = self.generate_actual_images(num_images)
+            target_patterns = self.generate_icons(num_images)
         elif choice == 2:
             target_patterns = self.generate_digits(num_images)
         else:
@@ -106,17 +120,17 @@ class DatasetGenerator:
         Creates full dataset with the size of each type based on some predefined ratios.
         """
         num_random_images = int(self.ratios[0] * self.num_images)
-        num_actual_images = int(self.ratios[1] * self.num_images)
-        num_digits_images = self.num_images - num_random_images - num_actual_images
+        num__images = int(self.ratios[1] * self.num_images)
+        num_digits_images = self.num_images - num_random_images - num__images
         to_concat = []
         if num_random_images > 0:
             random_targets = self.create_pattern_dataset(num_random_images, 0)
             print("shape of random_patterns: ", random_targets.shape)
             to_concat.append(random_targets)
-        if num_actual_images > 0:
-            actual_targets = self.create_pattern_dataset(num_actual_images, 1)
-            print("shape of radian_patterns: ", actual_targets.shape)
-            to_concat.append(actual_targets)
+        if num__images > 0:
+            icon_targets = self.create_pattern_dataset(num__images, 1)
+            print("shape of radian_patterns: ", icon_targets.shape)
+            to_concat.append(icon_targets)
         if num_digits_images > 0:
             digits_targets = self.create_pattern_dataset(num_digits_images, 2)
             print("shape of digits_patterns: ", digits_targets.shape)
