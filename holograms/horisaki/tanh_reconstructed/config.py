@@ -13,6 +13,7 @@ IMAGE_SIZE = 64
 
 EPOCHS = 80
 LEARNING_RATE = 0.0015
+TRAIN_BATCH_SIZE = 50
 # LOSS_FN = nn.SmoothL1Loss(reduction='mean', beta=0.0015)
 LOSS_FN = nn.MSELoss(reduction='mean')
 INITIALIZER = lambda tensor: nn.init.kaiming_normal_(tensor, nonlinearity='relu')

@@ -389,20 +389,13 @@ class MultiscaleResNet(nn.Module):
         x = self.rblock(x) # final block
         m = nn.Sigmoid()
         return m(x)
-
-    def loss(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    
+    def loss(self, x: torch.Tensor, scaler: BaseEstimator) -> torch.Tensor:
         """
-        Computes loss based on model's criterion.
-        :param x: Inputs
-        :param y: Labels
+        Computes loss between FFT(prediction) and original based on model's criterion.
+        :param x: Inputs / Targets
         :return: loss value
         """
-        return self.loss_fn(self.forward(x), y)
-    
-    def fresnel_loss(self, x: torch.Tensor, scaler: BaseEstimator) -> torch.Tensor:
-        """
-        Computes loss between FFT(prediction) and original based on model's criterion
-        """
         # unscale x to get original image
         # Be careful here tho..
         # 1. need to clone, detach from computational graph, and shift to cpu and convert numpy format
@@ -418,48 +411,10 @@ class MultiscaleResNet(nn.Module):
         unscaled_x = torch.from_numpy(unscaled_x).to(DTYPE_TORCH).to(x.device)
 
         predictions = self.forward(x)
-
         z = apply_fresnel_propagation(predictions)
-        # normalized_z = normalize(z)
-        loss2 = 10 * self.loss_fn(unscaled_x, z)
+        loss = 10 * self.loss_fn(unscaled_x, z)
 
-        return loss2
-    
-
-    def special_loss(self, x: torch.Tensor, y: torch.Tensor, scaler: BaseEstimator) -> torch.Tensor:
-        """
-        Computes weighted loss based on model's criterion and 
-        loss between FFT(model's output) and original
-        """
-        # unscale x to get original image
-        # Be careful here tho..
-        # 1. need to clone, detach from computational graph, and shift to cpu and convert numpy format
-        # reason: scikit-learn expect np arrays and np arrays operate on cpu data and
-        cloned_x = x.clone().detach().cpu().numpy()
-        # 2. squeeze to remove channel dim and reshape for scaler to unscale
-        cloned_reshaped_x = np.squeeze(cloned_x, axis=1)
-        cloned_reshaped_x = cloned_reshaped_x.reshape(cloned_reshaped_x.shape[0], -1)
-        unscaled_x = scaler.inverse_transform(cloned_reshaped_x)
-        # 3. shape it back and get tensor
-        unscaled_x = np.expand_dims(unscaled_x, axis=1)
-        unscaled_x = unscaled_x.reshape(x.shape)
-        unscaled_x = torch.from_numpy(unscaled_x).to(DTYPE_TORCH).to(x.device)
-
-        predictions = self.forward(x)
-        loss1 = self.loss_fn(predictions, y)
-
-        z = apply_fresnel_propagation(predictions)
-        normalized_z = normalize(z)
-        loss2 = self.loss_fn(normalized_z, unscaled_x)
-
-        return 0.6*loss1 + 0.4*loss2
-
-    def predict(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Overloaded method to conform to ML terminology.
-        """
-        with torch.no_grad():
-            return self.forward(x)
+        return loss
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """

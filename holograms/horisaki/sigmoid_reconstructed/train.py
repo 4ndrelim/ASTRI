@@ -11,13 +11,13 @@ import torch.fft
 from torch.utils.data import DataLoader
 
 from model import MultiscaleResNet
-from config import EPOCHS, LEARNING_RATE, IMAGE_SIZE, LOSS_FN, DTYPE_NP, DTYPE_TORCH, INITIALIZER, GAMMA, MILESTONES
+from config import EPOCHS, LEARNING_RATE, IMAGE_SIZE, LOSS_FN, DTYPE_NP, DTYPE_TORCH, INITIALIZER, GAMMA, MILESTONES, TRAIN_BATCH_SIZE
 from utils import apply_fresnel_propagation, normalize
 
 import joblib
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import matplotlib.pyplot as plt
 
@@ -52,22 +52,17 @@ class IdentityScaler(BaseEstimator, TransformerMixin):
 # Utility functions
 def load_data(path: str) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Loads dataset saved as npy format, and splits into features and labels.
-    Note: Each data instance is 64 x 128 where the first 64x64 is feature image 
-    and the next 64x64 is the label image.
+    Loads dataset saved as npy format.
+    Note: Each data instance is IMAGE_SIZE x IMAGE_SIZE where the first 64x64
 
     :param path: data file path
-    :param N: Image size
-    :return: feature and label numpy array depending on dataset_type
+    :return: features numpy array depending on dataset_type
     """
     # assert format of path
     data = np.load(path).astype(DTYPE_NP)
-    assert data.shape[2] == data.shape[1] * 2, "Col dimension should be twice that of row"
-
-    features = data[:, :, :64] # take first 64 as features
-    labels = data[:, :, 64:] # take last 64 as labels
-
-    return features, labels
+    assert data.shape[1] == data.shape[2] == IMAGE_SIZE, "Images in dataset of incorrect dimension."
+    features = data # image itself is the feature
+    return features
 
 
 def feature_scaling(train: np.ndarray,
@@ -122,8 +117,8 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
     :param dev: device where tensors are held
     :return: Train, validation, test DataLoaders
     """
-    X_train, y_train = load_data(train_path)
-    X_test, y_test = load_data(test_path)
+    X_train = load_data(train_path)
+    X_test = load_data(test_path)
 
     # perform scaling
     X_train_scaled, X_test_scaled = feature_scaling(X_train, X_test, scaler, save_path=scaler_path)
@@ -131,28 +126,24 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
     # Add channel dimension: (num_samples, height, width) -> (num_samples, 1, height, width)
     X_train_scaled = np.expand_dims(X_train_scaled, axis=1)
     X_test_scaled = np.expand_dims(X_test_scaled, axis=1)
-    y_train = np.expand_dims(y_train, axis=1)
-    y_test = np.expand_dims(y_test, axis=1)
 
     # Convert to tensors and store at device
     X_train_scaled = torch.from_numpy(X_train_scaled).to(DTYPE_TORCH).to(dev)
     X_test_scaled = torch.from_numpy(X_test_scaled).to(DTYPE_TORCH).to(dev)
-    y_train = torch.from_numpy(y_train).to(DTYPE_TORCH).to(dev)
-    y_test = torch.from_numpy(y_test).to(DTYPE_TORCH).to(dev)
 
     # permuate indices for train and validation set later on
     indices = np.random.permutation(X_train_scaled.shape[0])
-    train_len = int(X_train_scaled.shape[0] * 0.9) # 10% of dataset to be used for validation
+    train_len = int(X_train_scaled.shape[0] * 0.85) # 15% of dataset to be used for validation
     training_idx, val_idx = indices[:train_len], indices[train_len:]
-    X_training_scaled, y_training = X_train_scaled[training_idx, :], y_train[training_idx, :]
-    X_val_scaled, y_val = X_train_scaled[val_idx, :], y_train[val_idx, :]
+    X_training_scaled = X_train_scaled[training_idx, :]
+    X_val_scaled = X_train_scaled[val_idx, :]
 
     # set drop_last=True for consistent batch size during training
-    train_loader = DataLoader(list(zip(X_training_scaled, y_training)),
-                              shuffle=True, batch_size=50, drop_last=True)
-    val_loader = DataLoader(list(zip(X_val_scaled, y_val)),
+    train_loader = DataLoader(list(X_training_scaled),
+                              shuffle=True, batch_size=TRAIN_BATCH_SIZE, drop_last=True)
+    val_loader = DataLoader(list(X_val_scaled),
                             shuffle=False, batch_size=128, drop_last=False)
-    test_loader = DataLoader(list(zip(X_test_scaled, y_test)),
+    test_loader = DataLoader(list(X_test_scaled),
                              shuffle=False, batch_size=128, drop_last=False)
 
     return train_loader, val_loader, test_loader
@@ -192,11 +183,9 @@ def train_model(
     for epoch in range(num_epochs):
         model.train() # set to training mode
         train_loss, batch_num = 0.0, 0
-        for X_batch, y_batch in train_loader:
+        for X_batch in train_loader:
             optimizer.zero_grad()
-            # loss = model.loss(X_batch, y_batch)
-            loss = model.fresnel_loss(X_batch, scaler)
-            # loss = model.special_loss(X_batch, y_batch, scaler)
+            loss = model.loss(X_batch, scaler)
             # apply update
             loss.backward()
             optimizer.step()
@@ -206,7 +195,7 @@ def train_model(
 
         model.eval() # set to eval mode to evaluate on validation set
         with torch.no_grad(): # disable gradient
-            val_loss = evaluate_model_reconstructed(model, validation_loader)
+            val_loss = evaluate_model(model, validation_loader)
             user_msg = f"{epoch+1:03d}-------" + \
                        f"{train_loss / batch_num:.8f}-----" + \
                        f"{val_loss:.8f}"
@@ -224,96 +213,25 @@ def train_model(
         # adjust lr after every epoch, if specified
         if scheduler:
             scheduler.step()
-    # save model
-    if save_path:
-        assert model_state is not None, "Something went wrong while saving the model.."
-        torch.save(model_state, save_path)
 
 
 # pylint: disable=invalid-name
 def evaluate_model(model: MultiscaleResNet,
                    data_loader: DataLoader) -> float:
     """
-    Evaluate model on a dataset using MAE.
-    :param model: model
-    :param data_loader: Test set
-    :return: loss
-    """
-    model.eval()
-    total_mae = 0.0 # use MAE as a metric
-
-    #
-    to_remove = 0
-    scaler = joblib.load(SCALER_PATH) # for reversing
-
-    with torch.no_grad():  # disable gradient computation
-        for X, y in data_loader:
-            # loss += model.loss(X, y).detach().cpu().item()
-            predictions = model.forward(X)
-            # reshape
-            y_np = y.cpu().numpy().reshape(y.shape[0], -1)
-            predictions_np = predictions.cpu().numpy().reshape(predictions.shape[0], -1)
-            # accumulate MAE
-            for i in range(y_np.shape[0]):
-                total_mae += mean_absolute_error(y_np[i], predictions_np[i])
-
-            unscaled_X_cloned = X.clone().detach().cpu().numpy()
-            unscaled_X_cloned = np.squeeze(unscaled_X_cloned, axis=1)
-            unscaled_X_flattened = unscaled_X_cloned.reshape(unscaled_X_cloned.shape[0], -1)
-            unscaled_X_flattened = scaler.inverse_transform(unscaled_X_flattened)
-            unscaled_X = unscaled_X_flattened.reshape((X.shape[0], X.shape[-2], X.shape[-1]))
-            unscaled_X = np.expand_dims(unscaled_X, axis=1) # channel dim
-            z = apply_fresnel_propagation(predictions)
-            predictions_np = predictions.cpu().numpy()
-            z_np = normalize(z.cpu().numpy())
-
-            if to_remove < 1:
-                # just take the first
-                global TRACKED_COUNTER
-                img = np.concatenate((unscaled_X[0][0], predictions_np[0][0], z_np[0][0]), axis=1)
-                TRACKED_NP[TRACKED_COUNTER] = img
-                plt.subplot(1,3,1)
-                plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, :IMAGE_SIZE], cmap='gray')
-                plt.title('Original')
-                plt.axis('off')
-
-                plt.subplot(1,3,2)
-                plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, IMAGE_SIZE:2*IMAGE_SIZE], cmap='gray')
-                plt.title('Predictions')
-                plt.axis('off')
-
-                plt.subplot(1,3,3)
-                transformed = TRACKED_NP[TRACKED_COUNTER][:, 2*IMAGE_SIZE:]
-                transformed[transformed > 0.5] = 0
-                plt.imshow(transformed, cmap='gray')
-                plt.title('Reconstructed')
-                plt.axis('off')
-
-                plt.show()
-                TRACKED_COUNTER = TRACKED_COUNTER + 1
-                to_remove += 1
-
-    num_samples = len(data_loader.dataset)
-    average_mae = total_mae / num_samples
-    return average_mae
-
-
-def evaluate_model_reconstructed(model: MultiscaleResNet,
-                                 data_loader: DataLoader) -> float:
-    """
-    Evaluate model on a dataset using MAE between original and reconstructed image.
+    Evaluate model on a dataset using MAE or MSE between original and reconstructed image.
     :param model: model
     :param data_loader: Test set
     :return: loss
     """
     scaler = joblib.load(SCALER_PATH) # for reversing
     model.eval()
-    total_mae = 0
+    total_loss = 0
 
     #
     to_remove = 0
     with torch.no_grad():
-        for X, y in data_loader:
+        for X in data_loader:
             unscaled_X_cloned = X.clone().detach().cpu().numpy()
             unscaled_X_cloned = np.squeeze(unscaled_X_cloned, axis=1)
             unscaled_X_flattened = unscaled_X_cloned.reshape(unscaled_X_cloned.shape[0], -1)
@@ -327,8 +245,12 @@ def evaluate_model_reconstructed(model: MultiscaleResNet,
             z_np = z.cpu().numpy()
 
             for i in range(unscaled_X.shape[0]):
-                total_mae += mean_absolute_error(np.ravel(unscaled_X[i][0]),
-                                                 np.ravel(z_np[i][0]))
+                # total_loss += mean_absolute_error(np.ravel(unscaled_X[i][0]),
+                #                                   np.ravel(z_np[i][0]))
+
+                # use mse and *10 to make it comparable to train
+                total_loss += 10 * mean_squared_error(np.ravel(unscaled_X[i][0]),
+                                                      np.ravel(z_np[i][0]))
 
             if to_remove < 1:
                 # just take the first
@@ -340,36 +262,13 @@ def evaluate_model_reconstructed(model: MultiscaleResNet,
                 print("Predictions sum: ", np.sum(hologram))
                 # print("Transformed sq sum: ", np.sum(transformed**2))
                 np.save(os.path.join(BASE_DIR, "train_results.npy"), TRACKED_NP)
-                # plt.subplot(1,3,1)
-                # plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, :IMAGE_SIZE], cmap='gray')
-                # plt.title('Original')
-                # plt.axis('off')
 
-                # plt.subplot(1,3,2)
-                # plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, IMAGE_SIZE:2*IMAGE_SIZE], cmap='gray')
-                # plt.title('Predictions')
-                # plt.axis('off')
-
-                # plt.subplot(1,3,3)
-                # plt.imshow(TRACKED_NP[TRACKED_COUNTER][:, 2*IMAGE_SIZE:], cmap='gray')
-                # plt.title('Reconstructed')
-                # plt.axis('off')
-
-                # plt.show()
-
-                # plt.figure()
-                # plt.hist(hologram.flatten(), bins=100, edgecolor='black')
-                # plt.title('Histogram Transformed')
-                # plt.xlabel('Pixel Value')
-                # plt.ylabel('Frequency')
-                # plt.show()
                 TRACKED_COUNTER = TRACKED_COUNTER + 1
                 to_remove += 1
 
-
     num_samples = len(data_loader.dataset)
-    average_mae = total_mae / num_samples
-    return average_mae
+    average_loss = total_loss / num_samples
+    return average_loss
 
 
 # Main script
@@ -415,7 +314,5 @@ if __name__ == "__main__":
         )
 
     print("Model trained. Evaluating on test set..")
-    test_mae = evaluate_model_reconstructed(my_model, test_set)
-    print(f"MAE on TEST set: {test_mae}")
-
-    np.save(os.path.join(BASE_DIR, "train_results.npy"), TRACKED_NP)
+    test_loss = evaluate_model(my_model, test_set)
+    print(f"Loss on TEST set: {test_loss}")

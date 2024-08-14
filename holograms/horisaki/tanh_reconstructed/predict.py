@@ -22,7 +22,7 @@ MODEL_DIR = os.path.join(BASE_DIR, 'saved_model') # scaler and saved_model
 MODEL_PATH = os.path.join(MODEL_DIR, "my_model.pth")
 SCALER_PATH = os.path.join(MODEL_DIR, "scaler.pkl")
 
-DATASET_PATH = os.path.join(BASE_DIR, '10digits.npy') # dataset path [[CHANGE THIS!]
+DATASET_PATH = os.path.join(BASE_DIR, 'dataset', '10digits.npy') # dataset path [[CHANGE THIS!]
 
 class IdentityScaler(BaseEstimator, TransformerMixin):
     """

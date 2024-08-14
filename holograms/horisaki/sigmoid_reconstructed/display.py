@@ -2,9 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from utils import apply_fresnel_propagation_np, normalize
+from config import IMAGE_SIZE
 
-IMAGE_SIZE = 64
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "train_results.npy")
 
@@ -25,7 +24,6 @@ for i in range(data.shape[0]):
     plt.title('Predicted')
     plt.axis('off')
 
-    # reconstructed[reconstructed > 0.35] = 0
     plt.subplot(1, 3, 3)
     plt.imshow(reconstructed, cmap='gray')
     plt.title('Reconstructed')

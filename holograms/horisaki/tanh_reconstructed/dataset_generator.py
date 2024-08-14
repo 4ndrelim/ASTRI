@@ -10,7 +10,6 @@ import keras
 import random
 
 from utils import apply_fresnel_propagation_np, apply_gerchberg_saxton
-
 from config import DTYPE_NP, IMAGE_SIZE
 
 

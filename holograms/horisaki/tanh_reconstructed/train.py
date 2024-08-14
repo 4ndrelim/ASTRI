@@ -11,7 +11,7 @@ import torch.fft
 from torch.utils.data import DataLoader
 
 from model import MultiscaleResNet
-from config import EPOCHS, LEARNING_RATE, IMAGE_SIZE, LOSS_FN, DTYPE_NP, DTYPE_TORCH, INITIALIZER, GAMMA, MILESTONES
+from config import EPOCHS, LEARNING_RATE, IMAGE_SIZE, LOSS_FN, DTYPE_NP, DTYPE_TORCH, INITIALIZER, GAMMA, MILESTONES, TRAIN_BATCH_SIZE
 from utils import apply_fresnel_propagation, normalize
 
 import joblib
@@ -52,13 +52,11 @@ class IdentityScaler(BaseEstimator, TransformerMixin):
 # Utility functions
 def load_data(path: str) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Loads dataset saved as npy format, and splits into features and labels.
-    Note: Each data instance is 64 x 128 where the first 64x64 is feature image 
-    and the next 64x64 is the label image.
+    Loads dataset saved as npy format.
+    Note: Each data instance is IMAGE_SIZE x IMAGE_SIZE where the first 64x64
 
     :param path: data file path
-    :param N: Image size
-    :return: feature and label numpy array depending on dataset_type
+    :return: features numpy array depending on dataset_type
     """
     # assert format of path
     data = np.load(path).astype(DTYPE_NP)
@@ -135,14 +133,14 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
 
     # permuate indices for train and validation set later on
     indices = np.random.permutation(X_train_scaled.shape[0])
-    train_len = int(X_train_scaled.shape[0] * 0.9) # 10% of dataset to be used for validation
+    train_len = int(X_train_scaled.shape[0] * 0.85) # 15% of dataset to be used for validation
     training_idx, val_idx = indices[:train_len], indices[train_len:]
     X_training_scaled = X_train_scaled[training_idx, :]
     X_val_scaled = X_train_scaled[val_idx, :]
 
     # set drop_last=True for consistent batch size during training
     train_loader = DataLoader(list(X_training_scaled),
-                              shuffle=True, batch_size=50, drop_last=True)
+                              shuffle=True, batch_size=TRAIN_BATCH_SIZE, drop_last=True)
     val_loader = DataLoader(list(X_val_scaled),
                             shuffle=False, batch_size=128, drop_last=False)
     test_loader = DataLoader(list(X_test_scaled),
@@ -217,6 +215,7 @@ def train_model(
         if scheduler:
             scheduler.step()
 
+
 def evaluate_model(model: MultiscaleResNet,
                    data_loader: DataLoader) -> float:
     """
@@ -227,7 +226,7 @@ def evaluate_model(model: MultiscaleResNet,
     """
     scaler = joblib.load(SCALER_PATH) # for reversing
     model.eval()
-    total_mse = 0
+    total_loss = 0
 
     #
     to_remove = 0
@@ -246,12 +245,12 @@ def evaluate_model(model: MultiscaleResNet,
             z_np = z.cpu().numpy()
 
             for i in range(unscaled_X.shape[0]):
-                # total_mae += mean_absolute_error(np.ravel(unscaled_X[i][0]),
-                #                                  np.ravel(z_np[i][0]))
+                # total_loss += mean_absolute_error(np.ravel(unscaled_X[i][0]),
+                #                                   np.ravel(z_np[i][0]))
 
                 # use mse and *10 to make it comparable to train
-                total_mse += 10 * mean_squared_error(np.ravel(unscaled_X[i][0]),
-                                                     np.ravel(z_np[i][0]))
+                total_loss += 10 * mean_squared_error(np.ravel(unscaled_X[i][0]),
+                                                      np.ravel(z_np[i][0]))
 
             if to_remove < 1:
                 # just take the first
@@ -268,8 +267,8 @@ def evaluate_model(model: MultiscaleResNet,
                 to_remove += 1
 
     num_samples = len(data_loader.dataset)
-    average_mse = total_mse / num_samples
-    return average_mse
+    average_loss = total_loss / num_samples
+    return average_loss
 
 
 # Main script
@@ -316,4 +315,4 @@ if __name__ == "__main__":
 
     print("Model trained. Evaluating on test set..")
     test_loss = evaluate_model(my_model, test_set)
-    print(f"MAE on TEST set: {test_loss}")
+    print(f"Loss on TEST set: {test_loss}")
