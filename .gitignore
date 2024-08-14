@@ -1,1 +1,3 @@
 holograms/**/dataset
+*.pyc
+__pycache__/
