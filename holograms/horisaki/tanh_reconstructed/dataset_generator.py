@@ -14,8 +14,8 @@ from config import DTYPE_NP, IMAGE_SIZE
 
 
 # USER CONFIG
-NUM_IMAGES = 250000 # Number of images to generate
-RATIOS =  [20000/NUM_IMAGES, 130000/NUM_IMAGES, 100000/NUM_IMAGES] # Ratios of random:icons:digits
+NUM_IMAGES = 50000 # Number of images to generate
+RATIOS =  [0, 0.7, 0.3] # Ratios of random:icons:digits
 FILENAME = "train.npy" # Name of the file to save the dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCE_DIR = os.path.join(BASE_DIR, '..', 'resources')
@@ -37,24 +37,73 @@ class DatasetGenerator:
         self.save_path = save_path
         self.shuffle = shuffle
 
-    def generate_icons(self, num_images: int):
-        """
-        Add variety to dataset. Use real life images from CIFAR.
-        """
-        iconset = os.path.join(RESOURCE_DIR, "icons_50.npy")
-        data = np.load(iconset)
+    def augment_images(self, images: np.ndarray, num_images: int):
+        augmented_images = []
+        
+        while len(augmented_images) < num_images:
+            # Randomly pick an image from the input images
+            img = images[np.random.randint(0, len(images))].copy()
 
-        data = np.transpose(data, (0, 2, 3, 1))
-        # Convert to grayscale
-        data_gray = np.array([cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) for img in data])
-        # Resize images
-        data_resized = np.array([cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE)) for img in data_gray])
-        # Invert the grayscale images
-        processed_data = 255 - data_resized
-        # Randomly select num_images from processed_data
-        indices = np.random.choice(processed_data.shape[0], num_images, replace=False)
-        ret = processed_data[indices]
-        return ret
+            # Apply augmentations to the picked image
+            # Random small rotation (-15 to +15 degrees)
+            angle = np.random.uniform(-15, 15)
+            M = cv2.getRotationMatrix2D((IMAGE_SIZE // 2, IMAGE_SIZE // 2), angle, 1)
+            img = cv2.warpAffine(img, M, (IMAGE_SIZE, IMAGE_SIZE))
+            
+            # Random horizontal flip
+            if np.random.rand() > 0.5:
+                img = cv2.flip(img, 1)
+
+            # Random vertical flip
+            if np.random.rand() > 0.5:
+                img = cv2.flip(img, 0)
+
+            # Random translation (shifting)
+            max_shift = 5
+            x_shift = np.random.randint(-max_shift, max_shift)
+            y_shift = np.random.randint(-max_shift, max_shift)
+            M = np.float32([[1, 0, x_shift], [0, 1, y_shift]])
+            img = cv2.warpAffine(img, M, (IMAGE_SIZE, IMAGE_SIZE))
+
+            # Random brightness adjustment (90% to 110%)
+            brightness_factor = np.random.uniform(0.9, 1.1)
+            img = np.clip(img * brightness_factor, 0, 255).astype(np.uint8)
+
+            # Random contrast adjustment (95% to 120%)
+            contrast_factor = np.random.uniform(0.95, 1.20)
+            img = self.adjust_contrast(img, contrast_factor)
+
+            augmented_images.append(img)
+        return np.array(augmented_images[:num_images])
+
+    def adjust_contrast(self, img: np.ndarray, factor: float):
+        mean = np.mean(img)
+        img = (img - mean) * factor + mean
+        return np.clip(img, 0, 255).astype(np.uint8)
+
+    def generate_icons(self, num_images: int):
+        icons = np.load(os.path.join(RESOURCE_DIR, "icons_50.npy"))
+        icons = np.transpose(icons, (0, 2, 3, 1))  # shift channel dimension for cv2
+        icons_gray = np.array([cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) for img in icons])
+        data_resized = np.array([cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE)) for img in icons_gray])
+        processed_data = 255 - data_resized  # invert grayscale images
+
+        if num_images <= processed_data.shape[0]:
+            indices = np.random.choice(processed_data.shape[0], num_images, replace=False)
+            images = processed_data[indices]
+        else:
+            # 50% original, 50% augmented
+            num_original = min(num_images//2, processed_data.shape[0])
+            num_augmented = num_images - num_original
+            indices = np.random.choice(processed_data.shape[0], num_original, replace=False)
+            images_original = processed_data[indices]
+            images_augmented = self.augment_images(processed_data, num_augmented)
+            images = np.concatenate((images_original, images_augmented), axis=0)
+
+        images = images.astype(DTYPE_NP)
+        scale = np.sqrt(np.sum(images**2, axis=(-2, -1)))
+        scale = scale[:, np.newaxis, np.newaxis]
+        return images / scale
 
     def generate_random_target_patterns(self, num_images: int):
         """
@@ -120,16 +169,16 @@ class DatasetGenerator:
         Creates full dataset with the size of each type based on some predefined ratios.
         """
         num_random_images = int(self.ratios[0] * self.num_images)
-        num__images = int(self.ratios[1] * self.num_images)
-        num_digits_images = self.num_images - num_random_images - num__images
+        num_icons = int(self.ratios[1] * self.num_images)
+        num_digits_images = self.num_images - num_random_images - num_icons
         to_concat = []
         if num_random_images > 0:
             random_targets = self.create_pattern_dataset(num_random_images, 0)
             print("shape of random_patterns: ", random_targets.shape)
             to_concat.append(random_targets)
-        if num__images > 0:
-            icon_targets = self.create_pattern_dataset(num__images, 1)
-            print("shape of radian_patterns: ", icon_targets.shape)
+        if num_icons > 0:
+            icon_targets = self.create_pattern_dataset(num_icons, 1)
+            print("shape of icon_patterns: ", icon_targets.shape)
             to_concat.append(icon_targets)
         if num_digits_images > 0:
             digits_targets = self.create_pattern_dataset(num_digits_images, 2)

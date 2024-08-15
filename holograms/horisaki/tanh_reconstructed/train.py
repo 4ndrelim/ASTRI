@@ -215,6 +215,11 @@ def train_model(
         if scheduler:
             scheduler.step()
 
+        if epoch > 0 and epoch % 10 == 0:
+            model_state = model.state_dict()
+            tmp_save_path = os.path.join(MODEL_DIR, "tmp_model2.pth")
+            torch.save(model_state, tmp_save_path)
+
 
 def evaluate_model(model: MultiscaleResNet,
                    data_loader: DataLoader) -> float:

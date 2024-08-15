@@ -18,4 +18,4 @@ TRAIN_BATCH_SIZE = 50
 LOSS_FN = nn.MSELoss(reduction='mean')
 INITIALIZER = lambda tensor: nn.init.kaiming_normal_(tensor, nonlinearity='relu')
 GAMMA = 0.5
-MILESTONES = [10, 20, 30, 50]
+MILESTONES = [10, 25, 40]
