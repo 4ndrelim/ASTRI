@@ -128,7 +128,7 @@ if __name__ == "__main__":
     for i in range(predictions.shape[0]):
         print("Hologram pixel sum: ", torch.sum(predictions[i]))
         print(predictions[i])
-        transformed = apply_fresnel_propagation(predictions[i]).numpy().astype(DTYPE_NP)
+        transformed = apply_fresnel_propagation(predictions[i]).cpu().numpy().astype(DTYPE_NP)
         display(images[i],
-                predictions[i],
+                predictions[i].cpu().numpy(),
                 transformed)

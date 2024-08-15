@@ -11,11 +11,11 @@ DTYPE_NP = np.float64
 
 IMAGE_SIZE = 64
 
-EPOCHS = 80
-LEARNING_RATE = 0.0015
+EPOCHS = 60
+LEARNING_RATE = 0.002
 TRAIN_BATCH_SIZE = 50
 # LOSS_FN = nn.SmoothL1Loss(reduction='mean', beta=0.0015)
 LOSS_FN = nn.MSELoss(reduction='mean')
 INITIALIZER = lambda tensor: nn.init.kaiming_normal_(tensor, nonlinearity='relu')
 GAMMA = 0.5
-MILESTONES = [10, 25, 45, 70]
+MILESTONES = [10, 20, 30, 50]
