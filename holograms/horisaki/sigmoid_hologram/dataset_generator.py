@@ -8,15 +8,16 @@ import torch
 import torch.fft
 import keras
 
+import random
 
 from utils import apply_gerchberg_saxton, apply_fresnel_propagation_np, apply_fresnel_propagation_np_normalized, normalize
 from config import DTYPE_NP, DTYPE_TORCH, IMAGE_SIZE
 
 
 # USER CONFIG
-NUM_IMAGES = 10 # Number of images to generate (48000, 100)
+NUM_IMAGES = 1000 # Number of images to generate (48000, 100)
 RATIOS =  [0, 0, 1] # Ratios of random:radial:digits
-FILENAME = "delete.npy" # Name of the file to save the dataset
+FILENAME = "train.npy" # Name of the file to save the dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'dataset')
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -66,10 +67,7 @@ class DatasetGenerator:
         noise = np.random.normal(0, noise_std, pattern.shape)
         pattern += noise
 
-        pattern = pattern + max(0, -np.min(pattern))
-        scale = np.sqrt(np.sum(pattern**2, axis=(-2,-1)))
-        normalized = (1/scale) * pattern.astype(DTYPE_NP)
-
+        normalized = normalize(pattern)
         return normalized
     
 
@@ -95,11 +93,8 @@ class DatasetGenerator:
         Generate random target patterns.
         """
         random_intensities = np.random.randint(0, 256, (num_images, self.image_size, self.image_size), dtype=np.uint16)
-        scale = np.sqrt(np.sum(random_intensities**2, axis=(-2,-1)))
-        normalized = (1/scale)[:, np.newaxis, np.newaxis] * random_intensities.astype(DTYPE_NP)
+        normalized = normalize(random_intensities)
         return normalized
-        # return (random_intensities / 255.0).astype(DTYPE_NP)
-        # return (random_intensities - random_intensities.min()) / (random_intensities.max() - random_intensities.min())
     
     def generate_digits(self, num_images: int):
         """
@@ -112,34 +107,22 @@ class DatasetGenerator:
         n = len(images)
         scaled_images = np.zeros((num_images, self.image_size, self.image_size), dtype=np.uint8)
         # Repeat the process num_images times
-        for x in range(num_images):
-            d1 = np.random.randint(0, n)
-            d2 = np.random.randint(0, n)
-            while d1 == d2:
-                d2= np.random.randint(0, n)
-            d3 = np.random.randint(0, n)
-            while d3 == d1 or d3 == d2:
-                d3 = np.random.randint(0, n)
-            d4 = np.random.randint(0, n)
-            while d4 == d1 or d4 == d2 or d4 == d3:
-                d4 = np.random.randint(0, n)
-            img = np.vstack((np.hstack((images[d1], images[d2])), np.hstack((images[d3], images[d4]))))
+        for i in range(num_images):
+            random_indices = random.sample(range(n), 4)
+            d1, d2, d3, d4 = random_indices
+            img = np.vstack(
+                (np.hstack((images[d1], images[d2])), 
+                 np.hstack((images[d3], images[d4])))
+                 )
             # Resize the image
             scaled_img = cv2.resize(img, (self.image_size, self.image_size))
-            scaled_images[x] = scaled_img
+            scaled_images[i] = scaled_img
       
         # normalize
         scaled_images = scaled_images.astype(DTYPE_NP)
-        scale = np.sqrt(np.sum(scaled_images**2, axis=(-2,-1)))
-        scale = scale[:, np.newaxis, np.newaxis]
-        ret =  scaled_images / scale
-        ret = normalize(ret)
+        ret = normalize(scaled_images)
         assert np.all(ret >= 0) and np.all(ret <= 1), "Scaled images are not within the range [0, 1]"
         return ret
-        # scaled_images = scaled_images.astype(DTYPE_NP)
-        # # scaled_images /= 255.0
-        # # return scaled_images
-        # return (scaled_images-scaled_images.min()) / (scaled_images.max() - scaled_images.min())
 
     def create_pattern_dataset(self, num_images: int, choice: int):
         """
@@ -147,7 +130,7 @@ class DatasetGenerator:
         """
         if num_images == 0:
             # Return an empty array with appropriate shape if no images
-            return np.zeros((0, self.image_size, self.image_size, 2), dtype=DTYPE_NP)
+            return np.zeros((0, self.image_size, self.image_size), dtype=DTYPE_NP)
  
         # target_patterns on left, phase_patterns on right
         if choice == 0:
@@ -209,11 +192,8 @@ class DatasetGenerator:
 
 if __name__ == "__main__":
     generator = DatasetGenerator(NUM_IMAGES, IMAGE_SIZE, RATIOS, SAVE_PATH)
-    # if shuffle, add False to end of function call
     data = generator.save_dataset()
     
-    threshold_hist = []
-
     # # Display a few examples
     # for i in range(min(NUM_IMAGES, 20)):
     #     target = data[i][:, :IMAGE_SIZE]
@@ -248,34 +228,3 @@ if __name__ == "__main__":
     #     print("Pixel values fresnel: ", np.sum(transformed**2))
     #     print("\n")
     #     plt.show()
-
-
-    ########################## BELOW FOR EXPLORATION ###########################
-
-    #     threshold_hist.extend(transformed.flatten())
-
-    #     plt.subplot(1, 4, 1)
-    #     plt.hist(target.flatten(), bins=50, edgecolor='black')
-    #     plt.title('Histogram target')
-    #     plt.xlabel('Pixel Value')
-    #     plt.ylabel('Frequency')
-
-    #     plt.subplot(1, 4, 2)
-    #     plt.hist(transformed.flatten(), bins=50, edgecolor='black')
-    #     plt.title('Histogram Transformed')
-    #     plt.xlabel('Pixel Value')
-    #     plt.ylabel('Frequency')
-
-    #     plt.subplot(1, 4, 3)
-    #     plt.hist(hologram.flatten(), bins=100, edgecolor='black')
-    #     plt.title('Histogram Hologram')
-    #     plt.xlabel('Pixel Value')
-    #     plt.ylabel('Frequency')
-
-    #     plt.subplot(1, 4, 4)
-    #     plt.hist(np.abs(target.flatten()-transformed.flatten()), bins=50, edgecolor='black')
-    #     plt.title('difference')
-    #     plt.xlabel('Pixel Value')
-    #     plt.ylabel('Frequency')
-    #     plt.show()
-    

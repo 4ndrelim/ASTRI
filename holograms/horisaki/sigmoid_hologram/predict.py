@@ -50,7 +50,7 @@ def load_model(model: MultiscaleResNet, load_path: str, device: torch.device) ->
     model.eval()
 
 
-def load_data_for_eval(path: str) -> np.ndarray:
+def load_data(path: str) -> np.ndarray:
     """
     Loads dataset saved as npy format
     Note: Input should be 64x64
@@ -66,23 +66,6 @@ def load_data_for_eval(path: str) -> np.ndarray:
     assert features.shape[1] == features.shape[2] == 64, \
         "Data does not have the correct dimensions."
     return features
-
-
-def load_data_with_holo(path: str) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    A helper that loads original image and its hologram.
-    Note: Input should be 64 x 128
-    """
-    assert path is not None, "Make sure dataset path exists!"
-    data: np.ndarray = np.load(path)
-    # assert format of path
-    # make sure there's a batch dimension
-    assert data.ndim == 3, "Data should have a batch dimension!"
-    assert data.shape[1] == 64 and data.shape[2] == 128, \
-        "Data does not have the correct dimensions."
-    features = data[:, :, :64]
-    holograms = data[:, :, 64:]
-    return features, holograms
 
 
 def prepare_data_for_evaluation(imgs: np.ndarray, scaler: BaseEstimator, device: torch.device):
@@ -101,9 +84,9 @@ def prepare_data_for_evaluation(imgs: np.ndarray, scaler: BaseEstimator, device:
 
 
 # Utility Functions
-def display_hologram_and_transformed(original: np.ndarray,
-                                     hologram: np.ndarray,
-                                     transformed: np.ndarray):
+def display(original: np.ndarray,
+            hologram: np.ndarray,
+            transformed: np.ndarray):
     """
     Utility function to display input, 
     hologram (model's output),
@@ -130,17 +113,6 @@ def display_hologram_and_transformed(original: np.ndarray,
     plt.show()
 
 
-def display_image(x: np.ndarray, title: str):
-    """
-    Utility function to display an (greyscale) image from numpy format
-    """
-    assert x.ndim == 2, "Ensure image has 2 dimensions before display!"
-    plt.subplot(1, 1, 1)
-    plt.imshow(x, cmap='gray')
-    plt.title(title)
-    plt.axis('off')
-    plt.show()
-
 
 # Main script
 if __name__ == "__main__":
@@ -158,7 +130,7 @@ if __name__ == "__main__":
 
 
 
-    images = load_data_for_eval(DATASET_PATH)
+    images = load_data(DATASET_PATH)
     features = prepare_data_for_evaluation(images, loaded_scaler, device_)
 
     print("Predictions:")
@@ -169,27 +141,10 @@ if __name__ == "__main__":
     print(predictions.shape)
     predictions = np.squeeze(predictions, axis=1)
     for i in range(predictions.shape[0]):
-        print("Hologram pixel sum: ", np.sum(predictions[i]))
+        print("Hologram pixel sum: ", torch.sum(predictions[i]))
         print(predictions[i])
-        transformed = apply_fresnel_propagation(predictions[i]).numpy().astype(DTYPE_NP)
-        display_hologram_and_transformed(images[i],
-                                        predictions[i],
-                                        transformed)
-
-
-
-    # BELOW IS FOR MY USE!
-    # images, provided_holograms = load_data_with_holo(DATASET_PATH)
-    # features = prepare_data_for_evaluation(images, loaded_scaler, device_)
-
-    # print("Predictions:")
-    # predictions = loaded_model.predict(features)
-    # assert predictions.shape[0] == features.shape[0], "Something went really wrong.."
-
-    # # Remove the channel dimension
-    # predictions = np.squeeze(predictions, axis=1)
-    # print(predictions[0])
-    # display_hologram_and_transformed(images[0],
-    #                                  predictions[0],
-    #                                  apply_fresnel_propagation(predictions[0]).numpy().astype(DTYPE_NP))
-    # display_image(provided_holograms[0], "Known Hologram")
+        transformed = apply_fresnel_propagation(predictions[i]).cpu().numpy().astype(DTYPE_NP)
+        transformed[transformed > 0.29] = 0
+        display(images[i],
+                predictions[i].cpu().numpy(),
+                transformed)

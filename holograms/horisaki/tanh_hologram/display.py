@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 import os
 
 from utils import apply_fresnel_propagation_np, normalize
+from config import IMAGE_SIZE
 
-IMAGE_SIZE = 64
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "train_results1.npy")
+DATA_DIR = os.path.join(BASE_DIR, "train_results.npy")
 
 data = np.load(DATA_DIR)
 

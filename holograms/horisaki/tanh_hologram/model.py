@@ -445,13 +445,15 @@ class MultiscaleResNet(nn.Module):
         unscaled_x = torch.from_numpy(unscaled_x).to(DTYPE_TORCH).to(x.device)
 
         predictions = self.forward(x)
-        loss1 = self.loss_fn(predictions, y)
+        # loss1 = self.loss_fn(predictions, y)
+        mse_loss_fn = nn.MSELoss()
+        loss1 = torch.sqrt(mse_loss_fn(predictions, y))
 
         z = apply_fresnel_propagation(predictions)
         normalized_z = normalize(z)
         loss2 = self.loss_fn(normalized_z, unscaled_x)
 
-        return 0.6*loss1 + 0.4*loss2
+        return 0.9*loss1 + 0.1*loss2
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """
