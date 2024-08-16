@@ -92,6 +92,13 @@ After training (or even if you pre-mature terminate), you can run `display.py` a
 ## Predict.py
 Change `DATASET_PATH` to where your test dataset is stored and run the file to observe predicted hologram and reconstructed of each instance in your dataset.
 
+## Best Model
+More experiments can be done, but the best we have thus far is from tanh_reconstructed. Either `80_epochs` or `30000_train` or `icon_digits`. Below is a sample:
+
+![Sample1](./resources/sample1.png)
+![Sample2](./resources/sample2.png)
+
+
 ## Credits
 - Dr Xie
 - Andre
