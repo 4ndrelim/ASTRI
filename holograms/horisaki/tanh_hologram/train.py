@@ -11,7 +11,7 @@ import torch.fft
 from torch.utils.data import DataLoader
 
 from model import MultiscaleResNet
-from config import EPOCHS, LEARNING_RATE, IMAGE_SIZE, LOSS_FN, DTYPE_NP, DTYPE_TORCH, INITIALIZER, GAMMA, MILESTONES
+from config import EPOCHS, LEARNING_RATE, IMAGE_SIZE, LOSS_FN, DTYPE_NP, DTYPE_TORCH, INITIALIZER, GAMMA, MILESTONES, TRAIN_BATCH_SIZE
 from utils import apply_fresnel_propagation, normalize # normalize was imported from sklearn.metrics?
 
 import joblib
@@ -149,7 +149,7 @@ def prepare_data_for_training(train_path: str, test_path: str, dev: torch.device
 
     # set drop_last=True for consistent batch size during training
     train_loader = DataLoader(list(zip(X_training_scaled, y_training)),
-                              shuffle=True, batch_size=50, drop_last=True)
+                              shuffle=True, batch_size=TRAIN_BATCH_SIZE, drop_last=True)
     val_loader = DataLoader(list(zip(X_val_scaled, y_val)),
                             shuffle=False, batch_size=128, drop_last=False)
     test_loader = DataLoader(list(zip(X_test_scaled, y_test)),
